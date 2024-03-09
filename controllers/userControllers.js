@@ -117,6 +117,7 @@ async function uploadAvatarToDrive(avatar) {
   await avatar.mv(filePath);
 
   try {
+    // Upload the file
     const response = await drive.files.create({
       requestBody: {
         name: fileName,
@@ -128,12 +129,25 @@ async function uploadAvatarToDrive(avatar) {
       },
       fields: 'id'
     });
-    return response.data.id;
+
+    const fileId = response.data.id;
+
+    // Set permissions for the file
+    await drive.permissions.create({
+      fileId: fileId,
+      requestBody: {
+        role: 'reader',
+        type: 'anyone'
+      }
+    });
+
+    return fileId;
   } catch (error) {
     console.log(error);
     throw new HttpError("Error uploading image to Google Drive", 500);
   }
 }
+
 async function deleteAvatarFromDrive(avatarId) {
   try {
     const oauth2Client = new google.auth.OAuth2({
