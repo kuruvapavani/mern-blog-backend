@@ -15,40 +15,31 @@ const __dirname = dirname(__filename);
 // create new post
 
 
-
 const createPost = async (req, res, next) => {
   try {
     let { title, category, description } = req.body;
-
     if (!title || !category || !description || !req.files || req.files.length === 0) {
       throw new HttpError("Fill in all the fields and upload a file", 422);
     }
     const thumbnail = req.files.thumbnail;
-
     if (!thumbnail || thumbnail.size === undefined) {
       throw new HttpError("Image not provided. Please upload an image.", 422);
     }
-
     if (thumbnail.size > 2000000) {
       throw new HttpError("Image too big. It should be less than 2 MB.", 422);
     }
-
     let fileName = thumbnail.name;
     let splittedFileName = fileName.split('.');
     let newFileName = splittedFileName[0] + uuidv4() + '.' + splittedFileName[splittedFileName.length - 1];
-    const oauth2Client = new google.auth.OAuth2(process.env.CLIENT_ID, process.env.CLIENT_SECRET, process.env.REDIRECT_URI);
-
-    oauth2Client.setCredentials({ refresh_token: process.env.REFRESH_TOKEN });
-
-    const drive = google.drive({
-      version: 'v3',
-      auth: oauth2Client
-    });
-
     const filePath = path.join(__dirname, '..', '/uploads', newFileName);
-
-    async function uploadFile() {
-      try {
+    thumbnail.mv(filePath, async (err) => {
+      if (err) {
+        throw new HttpError(err);
+      } else {
+        if (oauth2Client.isTokenExpiring()) {
+          const { credentials } = await oauth2Client.refreshAccessToken();
+          oauth2Client.setCredentials(credentials);
+        }
         const response = await drive.files.create({
           requestBody: {
             name: newFileName,
@@ -60,18 +51,7 @@ const createPost = async (req, res, next) => {
           },
           fields: 'id' 
         });
-        return response.data.id;
-      } catch (error) {
-        console.log(error);
-        throw new HttpError("Error uploading image to Google Drive", 500);
-      }
-    }
-
-    thumbnail.mv(filePath, async (err) => {
-      if (err) {
-        throw new HttpError(err);
-      } else {
-        const fileId = await uploadFile();
+        const fileId = response.data.id;
         await drive.permissions.create({
           fileId: fileId,
           requestBody: {
@@ -79,7 +59,6 @@ const createPost = async (req, res, next) => {
             type: 'anyone'
           }
         });
-
         const newPost = await Post.create({
           title,
           category,
@@ -87,15 +66,9 @@ const createPost = async (req, res, next) => {
           thumbnail: fileId,
           authorId: req.user.id
         });
-
-        if (!newPost) {
-          throw new HttpError('Error occurred while creating post');
-        }
-
         const currentUser = await User.findById(req.user.id);
         const userPostCount = currentUser.posts + 1;
         await User.findByIdAndUpdate(req.user.id, { posts: userPostCount });
-
         res.status(200).json(newPost);
       }
     });
@@ -103,6 +76,7 @@ const createPost = async (req, res, next) => {
     next(error);
   }
 };
+
 
 
 
