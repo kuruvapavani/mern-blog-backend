@@ -8,6 +8,7 @@ import User from "../models/userModel.js";
 import HttpError from "../models/errorModel.js";
 import { dirname, join } from 'path';
 import {google} from 'googleapis'
+const { oauth2Client } = require('./path/to/oauth2ClientModule');
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
